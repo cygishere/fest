@@ -325,7 +325,10 @@ void
 fest_goto_prev (struct fest_state *fest)
 {
   int id = fest->pic_cur_id - 1;
-  id %= fest->pic_list_len;
+  if (id < 0)
+    {
+      id = fest->pic_list_len - 1;
+    }
   fest_goto_id (fest, id);
 }
 
