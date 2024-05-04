@@ -195,11 +195,19 @@ fest_load_pic_list (struct fest_state *fest, const char *pic_list_path)
     {
       line = NULL;
       s = getline (&line, &n, f);
+
       if (s == -1)
         {
           free (line);
           break;
         }
+
+      if (line[0] == '#' || line[0] == '\n')
+        {
+          free (line);
+          continue;
+        }
+
       line[s - 1] = 0;
       fest_pic_list_append (fest, line);
     }
