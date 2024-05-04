@@ -23,7 +23,8 @@ enum opt_type
   OPT_ERROR,
   OPT_ID,
   OPT_NEXT,
-  OPT_PREV
+  OPT_PREV,
+  OPT_START
 };
 
 struct option
@@ -112,6 +113,9 @@ main (int argc, char **argv)
           case OPT_PREV:
             fest_goto_prev (&fest);
             break;
+          case OPT_START:
+            fest_goto_id (&fest, fest.pic_cur_id);
+            break;
           case OPT_ERROR:
             break;
           default:
@@ -138,7 +142,7 @@ show_help (void)
                    "\n"
                    "Usage:\n"
                    "  fest <pic_list_path> <pic_cur_id_path> (--id=<id> | "
-                   "--next | --prev)\n"
+                   "--next | --prev | --start)\n"
                    "  fest --version\n"
                    "  fest --help\n"
                    "\n"
@@ -148,7 +152,8 @@ show_help (void)
                    "  -i<id> --id=<id> Set background to pic with id <id> in "
                    "<pic_list_path>\n"
                    "  -n     --next    Set background to next pic\n"
-                   "  -p     --prev    Set background to previous pic\n");
+                   "  -p     --prev    Set background to previous pic\n"
+                   "  -s     --start   Set background to current pic\n");
 }
 
 void
@@ -282,6 +287,10 @@ get_option (const char *arg)
   else if (strcmp (arg, "--prev") == 0 || strcmp (arg, "-p") == 0)
     {
       opt.type = OPT_PREV;
+    }
+  else if (strcmp (arg, "--start") == 0 || strcmp (arg, "-s") == 0)
+    {
+      opt.type = OPT_START;
     }
   else
     {
