@@ -3,7 +3,7 @@
 ## Usage
 ```shell
 Usage:
-  fest <pic_list_path> (--id=<id> | --next | --prev)
+  fest <pic_list_path> <pic_cur_id_path> (--id=<id> | --next | --prev)
   fest --version
   fest --help
 

@@ -1,5 +1,5 @@
 AC_PREREQ([2.72])
-AC_INIT([fest], [0.1], [/dev/null])
+AC_INIT([fest], [1.0], [https://github.com/cygishere/fest/issues])
 AC_CONFIG_SRCDIR([src/fest.c])
 AC_CONFIG_HEADERS([config.h])
 
