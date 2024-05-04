@@ -104,27 +104,27 @@ main (int argc, char **argv)
 void
 show_help (void)
 {
-  perror ("fest - FEh background SeTter\n"
-          "\n"
-          "Usage:\n"
-          "  fest <pic_list_path> (--id=<id> | --next | --prev)\n"
-          "  fest --version\n"
-          "  fest --help\n"
-          "\n"
-          "Options:\n"
-          "  -h     --help    Show this screen.\n"
-          "         --version Show version.\n"
-          "  -i<id> --id=<id> Set background to pic with id <id> in "
-          "<pic_list_path>\n"
-          "  -n     --next    Set background to next pic\n"
-          "  -p     --prev    Set background to previous pic\n");
+  fprintf (stderr, "fest - FEh background SeTter\n"
+                   "\n"
+                   "Usage:\n"
+                   "  fest <pic_list_path> (--id=<id> | --next | --prev)\n"
+                   "  fest --version\n"
+                   "  fest --help\n"
+                   "\n"
+                   "Options:\n"
+                   "  -h     --help    Show this screen.\n"
+                   "         --version Show version.\n"
+                   "  -i<id> --id=<id> Set background to pic with id <id> in "
+                   "<pic_list_path>\n"
+                   "  -n     --next    Set background to next pic\n"
+                   "  -p     --prev    Set background to previous pic\n");
 }
 
 inline void
 show_version (void)
 {
-  perror (
-      PACKAGE_STRING
+  fprintf (
+      stderr, PACKAGE_STRING
       "License MIT\n"
       "\n"
       "This is free software: you are free to change and redistribute it.\n"
