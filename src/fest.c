@@ -224,6 +224,7 @@ fest_load_pic_list (struct fest_state *fest, const char *pic_list_path)
 void
 fest_load_pic_cur_id (struct fest_state *fest, const char *pic_cur_id_path)
 {
+  fest->pic_cur_id_path = pic_cur_id_path;
   FILE *f = fopen (pic_cur_id_path, "r");
   if (!f)
     {
@@ -255,8 +256,6 @@ fest_load_pic_cur_id (struct fest_state *fest, const char *pic_cur_id_path)
   fest->pic_cur_id = (int)id;
 
   free (line);
-
-  fest->pic_cur_id_path = pic_cur_id_path;
 }
 
 struct option
