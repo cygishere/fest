@@ -14,8 +14,13 @@ AC_CHECK_HEADER_STDBOOL
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
+AC_TYPE_SIZE_T
+AC_TYPE_SSIZE_T
 
 # Checks for library functions.
+AC_FUNC_REALLOC
+AC_CHECK_FUNCS([strerror strtol])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
+
