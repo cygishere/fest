@@ -1,6 +1,7 @@
 #include "config.h"
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -64,6 +65,8 @@ static inline void fest_write_id (struct fest_state *fest);
 static void fest_pic_list_append (struct fest_state *fest,
                                   const char *pic_path);
 static void fest_pic_list_free (struct fest_state *fest);
+
+static void str_trim (char *str);
 
 int
 main (int argc, char **argv)
@@ -207,7 +210,9 @@ fest_load_pic_list (struct fest_state *fest, const char *pic_list_path)
           break;
         }
 
-      if (line[0] == '#' || line[0] == '\n')
+      str_trim (line);
+
+      if (line[0] == '#' || line[0] == 0)
         {
           free (line);
           continue;
@@ -389,4 +394,36 @@ fest_write_id (struct fest_state *fest)
 
   fprintf (f, "%d\n", fest->pic_cur_id);
   fclose (f);
+}
+
+void
+str_trim (char *str)
+{
+  char *cur = str;
+  while (*cur)
+    {
+      ++cur;
+    }
+  --cur;
+
+  while (isspace (*cur))
+    {
+      --cur;
+    }
+  cur[1] = 0;
+
+  char *cpy = str;
+  while (*cpy && isspace (*cpy))
+    {
+      ++cpy;
+    }
+
+  cur = str;
+  while (*cpy)
+    {
+      *cur = *cpy;
+      ++cur;
+      ++cpy;
+    }
+  *cur = 0;
 }
