@@ -17,9 +17,11 @@ Options:
 ```
 
 ## pic_list file
-Put absolute path to your images in it.
-Lines starting with # will be ignored.
-Please add new line in the end of the file.
+- Put absolute path to your images in it.
+
+- Lines starting with # will be ignored.
+
+- Please add new line in the end of the file.
 
 ## pic_cur_id file
 Please only put a single intger in it.
