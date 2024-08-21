@@ -10,7 +10,7 @@ Usage:
 Options:
   -h     --help    Show this screen.
          --version Show version.
-  -i<id> --id=<id> Set background to pic with id <id> in <pic_list_path>
+  -i<id> --id=<id> Set background to pic with id <id> in <pic_list_path> (zero-based)
   -n     --next    Set background to next pic
   -p     --prev    Set background to previous pic
   -s     --start   Set background to current pic
