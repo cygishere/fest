@@ -218,8 +218,20 @@ fest_load_pic_list (struct fest_state *fest, const char *pic_list_path)
           continue;
         }
 
-      line[s - 1] = 0;
+      if (line[0] == '~')
+	{
+          const char *home_path = getenv ("HOME");
+          const size_t home_path_len = strlen (home_path);
+          size_t line_len = strlen (line);
+          char *line_expand = malloc (sizeof *line_expand * (home_path_len + line_len + 1));
+	  char *temp = stpncpy (line_expand, home_path, home_path_len + 1);
+	  stpncpy (temp, line + 1, line_len + 1 - 1); // + 1 to skip the '~'
+	  free (line);
+	  line = line_expand;
+	}
+
       fest_pic_list_append (fest, line);
+      fprintf (stderr, "INFO: pic list append: %s\n", line);
     }
   if (errno == ENOMEM)
     {
