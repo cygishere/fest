@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #define FEST_PIC_LIST_LEN_INIT 5
 
@@ -19,43 +20,29 @@ enum sysexits
   EX_IOERR = 74
 };
 
-enum opt_type
-{
-  OPT_ERROR,
-  OPT_ID,
-  OPT_NEXT,
-  OPT_PREV,
-  OPT_START
-};
-
-struct option
-{
-  enum opt_type type;
-  int id;
-};
-
 struct fest_state
 {
-  size_t pic_list_cap;
-  size_t pic_list_len;
-  const char **pic_list;
-
-  int pic_cur_id;
-
-  const char *pic_cur_id_path;
+  char id_path[PATH_MAX];      /* id is a file named `profile.id` in tmp dir
+                                  containing the id of current image of
+                                  corresponding profile */
+  char session_path[PATH_MAX]; /* session is a file in tmp dir containing the
+                                  abs path of the current profile */
+  char profile_path[PATH_MAX]; /* profile is a file in config dir containing a
+                                  list of path to images */
+  char *home_dir;              /* $HOME */
+  char *cache_dir;              /* $XDG_CACHE_HOME */
+  char *profile;      /* name of current profile */
+  int pic_id;
 };
 
 static void show_help (void);
 static inline void show_version (void);
-static inline bool is_arg_help (const char *arg);
-static inline bool is_arg_version (const char *arg);
 
-static inline void fest_load_pic_list (struct fest_state *fest,
-                                       const char *pic_list_path);
-static inline void fest_load_pic_cur_id (struct fest_state *fest,
-                                         const char *pic_cur_id_path);
+/* if `profile` is NULL, fest will find current profile in session file,
+   if there is no session file, fest will fail.
+*/
+static inline void fest_init (struct fest_state *fest, const char *profile);
 
-static inline struct option get_option (const char *arg);
 static inline void fest_goto_id (struct fest_state *fest, int id);
 static inline void fest_goto_next (struct fest_state *fest);
 static inline void fest_goto_prev (struct fest_state *fest);
@@ -75,22 +62,29 @@ main (int argc, char **argv)
 
   switch (argc)
     {
-    case 1:
-      {
-        show_help ();
-        exit (EX_USAGE);
-      }
-      break;
     case 2:
       {
-        if (is_arg_help (argv[1]))
+        if (0 == strcmp (argv[1], "-h") ||
+            0 == strcmp (argv[1], "--help")
+            )
           {
             show_help ();
             exit (EX_OK);
           }
-        else if (is_arg_version (argv[1]))
+        else if (0 == strcmp (argv[1], "-v") ||
+                 0 == strcmp (argv[1], "--version"))
           {
             show_version ();
+            exit (EX_OK);
+          }
+        else if (0 == strcmp (argv[1], "next"))
+          {
+            fest_goto_next(&fest);
+            exit (EX_OK);
+          }
+        else if (0 == strcmp (argv[1], "prev"))
+          {
+            fest_goto_prev(&fest);
             exit (EX_OK);
           }
         else
@@ -100,31 +94,10 @@ main (int argc, char **argv)
           }
       }
       break;
-    case 4:
+    case 3:
       {
-        fest_load_pic_list (&fest, argv[1]);
-        fest_load_pic_cur_id (&fest, argv[2]);
-        struct option opt = get_option (argv[3]);
-        switch (opt.type)
-          {
-          case OPT_ID:
-            fest_goto_id (&fest, opt.id);
-            break;
-          case OPT_NEXT:
-            fest_goto_next (&fest);
-            break;
-          case OPT_PREV:
-            fest_goto_prev (&fest);
-            break;
-          case OPT_START:
-            fest_goto_id (&fest, fest.pic_cur_id);
-            break;
-          case OPT_ERROR:
-            break;
-          default:
-            fprintf (stderr, "ERROR: option type not recognised\n");
-            break;
-          }
+        fest_select_profile(&fest, argv[2]);
+        exit (EX_OK);
       }
       break;
     default:
@@ -141,22 +114,26 @@ main (int argc, char **argv)
 void
 show_help (void)
 {
-  fprintf (stderr, "fest - FEh background SeTter\n"
-                   "\n"
-                   "Usage:\n"
-                   "  fest <pic_list_path> <pic_cur_id_path> (--id=<id> | "
-                   "--next | --prev | --start)\n"
-                   "  fest --version\n"
-                   "  fest --help\n"
-                   "\n"
-                   "Options:\n"
-                   "  -h     --help    Show this screen.\n"
-                   "         --version Show version.\n"
-                   "  -i<id> --id=<id> Set background to pic with id <id> in "
-                   "<pic_list_path>\n"
-                   "  -n     --next    Set background to next pic\n"
-                   "  -p     --prev    Set background to previous pic\n"
-                   "  -s     --start   Set background to current pic\n");
+  fprintf (
+      stderr,
+      "Usage:\n"
+      "  fest select <profile>\n"
+      "  fest next\n"
+      "  fest prev\n"
+      "  fest -v | --version\n"
+      "  fest -h | --help\n"
+      "\n"
+      "Subcommands:\n"
+      "  select <profile>  set current profile to <profile>,\n"
+      "                    which is a file name in ~/.config/fest.\n"
+      "  next              set current bg to the next pic of current profile\n"
+      "  prev              set current bg to the previous pic of current "
+      "profile\n"
+      "\n"
+      "Options:\n"
+      "  -h     --help    Show this screen.\n"
+      "  -v     --version Show version.\n"
+  );
 }
 
 void
@@ -173,25 +150,14 @@ show_version (void)
       "Written by cygishere.\n");
 }
 
-bool
-is_arg_help (const char *arg)
-{
-  return (strcmp (arg, "--help") == 0) || (strcmp (arg, "-h") == 0);
-}
-
-bool
-is_arg_version (const char *arg)
-{
-  return (strcmp (arg, "--version") == 0);
-}
-
 void
-fest_load_pic_list (struct fest_state *fest, const char *pic_list_path)
+fest_init (struct fest_state *fest, const char *profile)
 {
-  FILE *f = fopen (pic_list_path, "r");
+  assert(0 && "TODO");
+  FILE *f = fopen (profile, "r");
   if (!f)
     {
-      fprintf (stderr, "ERROR: failed to open %s: %s\n", pic_list_path,
+      fprintf (stderr, "ERROR: failed to open %s: %s\n", profile,
                strerror (errno));
       exit (EX_NOINPUT);
     }
@@ -241,81 +207,6 @@ fest_load_pic_list (struct fest_state *fest, const char *pic_list_path)
     }
 
   fclose (f);
-}
-
-void
-fest_load_pic_cur_id (struct fest_state *fest, const char *pic_cur_id_path)
-{
-  fest->pic_cur_id_path = pic_cur_id_path;
-  FILE *f = fopen (pic_cur_id_path, "r");
-  if (!f)
-    {
-      if (errno == ENOENT)
-        {
-          fest->pic_cur_id = 0;
-          return;
-        }
-      else
-        {
-          fprintf (stderr, "ERROR: failed to open %s: (%d) %s\n",
-                   pic_cur_id_path, errno, strerror (errno));
-          exit (EX_NOINPUT);
-        }
-    }
-
-  char *line = NULL;
-  size_t n = 0;
-  ssize_t s = getline (&line, &n, f);
-  if (s == -1)
-    {
-      free (line);
-      fest->pic_cur_id = 0;
-      return;
-    }
-
-  char *end = NULL;
-  long id = strtol (line, &end, 10);
-  fest->pic_cur_id = (int)id;
-
-  free (line);
-}
-
-struct option
-get_option (const char *arg)
-{
-  struct option opt = { 0 };
-
-  if (strncmp (arg, "--id=", strlen ("--id=")) == 0)
-    {
-      long id = strtol (arg + strlen ("--id="), NULL, 10);
-      opt.type = OPT_ID;
-      opt.id = (int)id;
-    }
-  else if (strncmp (arg, "-i", strlen ("-i")) == 0)
-    {
-      long id = strtol (arg + strlen ("-i"), NULL, 10);
-      opt.type = OPT_ID;
-      opt.id = (int)id;
-    }
-  else if (strcmp (arg, "--next") == 0 || strcmp (arg, "-n") == 0)
-    {
-      opt.type = OPT_NEXT;
-    }
-  else if (strcmp (arg, "--prev") == 0 || strcmp (arg, "-p") == 0)
-    {
-      opt.type = OPT_PREV;
-    }
-  else if (strcmp (arg, "--start") == 0 || strcmp (arg, "-s") == 0)
-    {
-      opt.type = OPT_START;
-    }
-  else
-    {
-      fprintf (stderr, "ERROR: unknown option %s\n", arg);
-      exit (EX_USAGE);
-    }
-
-  return opt;
 }
 
 void
