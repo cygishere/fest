@@ -3,17 +3,21 @@
 ## Usage
 ```shell
 Usage:
-  fest <pic_list_path> <pic_cur_id_path> (--id=<id> | --next | --prev | --start)
-  fest --version
-  fest --help
+  fest select <profile>
+  fest next
+  fest prev
+  fest -v | --version
+  fest -h | --help
+
+Subcommands:
+  select <profile>  set current profile to <profile>,
+                    which is a file name in ~/.config/fest.
+  next              set current bg to the next pic of current profile
+  prev              set current bg to the previous pic of current profile
 
 Options:
   -h     --help    Show this screen.
-         --version Show version.
-  -i<id> --id=<id> Set background to pic with id <id> in <pic_list_path> (zero-based)
-  -n     --next    Set background to next pic
-  -p     --prev    Set background to previous pic
-  -s     --start   Set background to current pic
+  -v     --version Show version.
 ```
 
 ## pic_list file
@@ -22,9 +26,6 @@ Options:
 - Lines starting with # will be ignored.
 
 - Please add new line in the end of the file.
-
-## pic_cur_id file
-Please only put a single intger in it.
 
 ## TODOs
 1. the `pic_cur_id_path` file should not be part of the config
