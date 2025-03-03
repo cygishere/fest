@@ -114,10 +114,19 @@ main (int argc, char **argv)
       break;
     case 3:
       {
-        fest_init (&fest, argv[2]);
-        fest_goto_id (&fest, fest.pic_id);
-        fest_write_session(&fest);
-        exit (EX_OK);
+        if (0 == strcmp (argv[1], "select") ||
+            0 == strcmp (argv[1], "s"))
+          {
+            fest_init (&fest, argv[2]);
+            fest_goto_id (&fest, fest.pic_id);
+            fest_write_session (&fest);
+            exit (EX_OK);
+          }
+        else
+          {
+            show_help ();
+            exit (EX_USAGE);
+          }
       }
       break;
     default:
@@ -219,7 +228,7 @@ fest_init (struct fest_state *fest, const char *profile)
       strncpy (fest->profile_path, line, PATH_MAX);
       strncpy (fest->profile, basename (line), PATH_MAX);
       free (line);
-      
+
       fclose (f);
     }
 
@@ -290,7 +299,7 @@ fest_goto_id (struct fest_state *fest, int id)
                fest->profile_path);
       exit (-1);
     }
-  
+
   id = id % len;
   if (id < 0)
     {
@@ -331,9 +340,9 @@ fest_goto_id (struct fest_state *fest, int id)
                   getline (&line, &n, f);
                   snprintf (cur_pic, PATH_MAX, "/%s", line);
                   free (line);
-                  str_trim (cur_pic); 
+                  str_trim (cur_pic);
                   break;
-                }              
+                }
             }
         }
       lastc = c;
