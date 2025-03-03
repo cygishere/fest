@@ -38,11 +38,11 @@ enum sysexits
 
 struct fest_state
 {
-  const char *home_dir;              /* $HOME, should not free this */
-  char cache_dir[PATH_MAX];             /* $XDG_CACHE_HOME/fest */
-  char session_path[PATH_MAX]; /* `session` is a file in `cache_dir` containing the
-                                  abs path of the current profile */
-  char profile[PATH_MAX];               /* name of current profile */
+  const char *home_dir;        /* $HOME, should not free this */
+  char cache_dir[PATH_MAX];    /* $XDG_CACHE_HOME/fest */
+  char session_path[PATH_MAX]; /* `session` is a file in `cache_dir` containing
+                                  the abs path of the current profile */
+  char profile[PATH_MAX];      /* name of current profile */
   char profile_path[PATH_MAX]; /* profile is a file in config dir containing a
                                   list of path to images */
   char id_path[PATH_MAX];      /* id is a file named `profile.id` in tmp dir
