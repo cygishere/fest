@@ -9,6 +9,10 @@
 #include <string.h>
 #include <limits.h>
 
+#include <unistd.h>
+#include <libgen.h>
+#include <sys/stat.h>
+
 #define FEST_PIC_LIST_LEN_INIT 5
 
 enum sysexits
@@ -20,18 +24,30 @@ enum sysexits
   EX_IOERR = 74
 };
 
+/*
+  $HOME
+  |-- .config/fest
+  |   |-- profile1
+  |   +-- profile2
+  |
+  +-- .local/share/fest
+      |-- session        -> contains current activate profile
+      |-- profile1.id    -> contains current image id for profile1
+      +-- profile2.id
+  */
+
 struct fest_state
 {
+  const char *home_dir;              /* $HOME, should not free this */
+  char cache_dir[PATH_MAX];             /* $XDG_CACHE_HOME/fest */
+  char session_path[PATH_MAX]; /* `session` is a file in `cache_dir` containing the
+                                  abs path of the current profile */
+  char profile[PATH_MAX];               /* name of current profile */
+  char profile_path[PATH_MAX]; /* profile is a file in config dir containing a
+                                  list of path to images */
   char id_path[PATH_MAX];      /* id is a file named `profile.id` in tmp dir
                                   containing the id of current image of
                                   corresponding profile */
-  char session_path[PATH_MAX]; /* session is a file in tmp dir containing the
-                                  abs path of the current profile */
-  char profile_path[PATH_MAX]; /* profile is a file in config dir containing a
-                                  list of path to images */
-  char *home_dir;              /* $HOME */
-  char *cache_dir;              /* $XDG_CACHE_HOME */
-  char *profile;      /* name of current profile */
   int pic_id;
 };
 
@@ -43,15 +59,15 @@ static inline void show_version (void);
 */
 static inline void fest_init (struct fest_state *fest, const char *profile);
 
+/* if `id` is larger than total pic number, select the first pic.
+   if `id` is less than 0, select the first pic.
+   */
 static inline void fest_goto_id (struct fest_state *fest, int id);
 static inline void fest_goto_next (struct fest_state *fest);
 static inline void fest_goto_prev (struct fest_state *fest);
 
+static inline void fest_write_session (struct fest_state *fest);
 static inline void fest_write_id (struct fest_state *fest);
-
-static void fest_pic_list_append (struct fest_state *fest,
-                                  const char *pic_path);
-static void fest_pic_list_free (struct fest_state *fest);
 
 static void str_trim (char *str);
 
@@ -79,11 +95,13 @@ main (int argc, char **argv)
           }
         else if (0 == strcmp (argv[1], "next"))
           {
+            fest_init (&fest, NULL);
             fest_goto_next(&fest);
             exit (EX_OK);
           }
         else if (0 == strcmp (argv[1], "prev"))
           {
+            fest_init (&fest, NULL);
             fest_goto_prev(&fest);
             exit (EX_OK);
           }
@@ -96,7 +114,9 @@ main (int argc, char **argv)
       break;
     case 3:
       {
-        fest_select_profile(&fest, argv[2]);
+        fest_init (&fest, argv[2]);
+        fest_goto_id (&fest, fest.pic_id);
+        fest_write_session(&fest);
         exit (EX_OK);
       }
       break;
@@ -107,8 +127,6 @@ main (int argc, char **argv)
       }
       break;
     }
-
-  fest_pic_list_free (&fest);
 }
 
 void
@@ -153,78 +171,180 @@ show_version (void)
 void
 fest_init (struct fest_state *fest, const char *profile)
 {
-  assert(0 && "TODO");
-  FILE *f = fopen (profile, "r");
-  if (!f)
+  fest->home_dir = getenv ("HOME");
+  assert (fest->home_dir && "you should have a $HOME, bro");
+  {
+    const char *cache_dir = getenv ("XDG_CACHE_HOME");
+    if (!cache_dir)
+      {
+        snprintf (fest->cache_dir, PATH_MAX, "%s/.local/share/fest",
+                  fest->home_dir);
+      }
+    else
+      {
+        snprintf (fest->cache_dir, PATH_MAX, "%s/fest", cache_dir);
+      }
+  }
+
+  if (-1 == mkdir (fest->cache_dir, 0777) && errno != EEXIST)
     {
-      fprintf (stderr, "ERROR: failed to open %s: %s\n", profile,
-               strerror (errno));
-      exit (EX_NOINPUT);
+      fprintf (stderr, "ERROR: cannot mkdir '%s': %s\n", fest->cache_dir,
+               strerror(errno));
+      exit (-1);
     }
 
-  char *line = NULL;
-  size_t n = 0;
-  ssize_t s = 0;
-  while (true)
-    {
-      line = NULL;
-      s = getline (&line, &n, f);
+  snprintf (fest->session_path, PATH_MAX, "%s/session", fest->cache_dir);
 
-      if (s == -1)
+  if (profile)
+    {
+      strncpy (fest->profile, profile, PATH_MAX);
+      snprintf (fest->profile_path, PATH_MAX, "%s/.config/fest/%s", fest->home_dir, fest->profile);
+    }
+  else
+    {
+      /* set .profile and .profile_path, user should validate .profile_path */
+      FILE *f = fopen (fest->session_path, "r");
+      if (!f)
         {
-          free (line);
-          break;
+          fprintf (
+              stderr,
+                   "ERROR: cannot read session, please select a profile first\n");
+          exit (EX_USAGE);
         }
 
+      char *line;
+      size_t n;
+      getline (&line, &n, f);
       str_trim (line);
-
-      if (line[0] == '#' || line[0] == 0)
-        {
-          free (line);
-          continue;
-        }
-
-      if (line[0] == '~')
-	{
-          const char *home_path = getenv ("HOME");
-          const size_t home_path_len = strlen (home_path);
-          size_t line_len = strlen (line);
-          char *line_expand = malloc (sizeof *line_expand * (home_path_len + line_len + 1));
-	  char *temp = stpncpy (line_expand, home_path, home_path_len + 1);
-	  stpncpy (temp, line + 1, line_len + 1 - 1); // + 1 to skip the '~'
-	  free (line);
-	  line = line_expand;
-	}
-
-      fest_pic_list_append (fest, line);
-      fprintf (stderr, "INFO: pic list append: %s\n", line);
-    }
-  if (errno == ENOMEM)
-    {
-      fprintf (stderr, "ERROR: failed to get line: %s\n", strerror (errno));
-      errno = 0;
-      exit (EX_OSERR);
+      strncpy (fest->profile_path, line, PATH_MAX);
+      strncpy (fest->profile, basename (line), PATH_MAX);
+      free (line);
+      
+      fclose (f);
     }
 
-  fclose (f);
+  /* set .id_path and .pic_id*/
+  snprintf (fest->id_path, PATH_MAX, "%s/%s.id", fest->cache_dir,
+            fest->profile);
+  {
+    FILE *f = fopen (fest->id_path, "r");
+    if (!f)
+      {
+        fest->pic_id = 0;
+      }
+    else
+      {
+        char *line = NULL;
+        size_t n;
+        getline (&line, &n, f);
+        str_trim (line);
+        fest->pic_id = strtol (line, NULL, 10);
+        free (line);
+        fclose (f);
+      }
+  }
 }
 
 void
 fest_goto_id (struct fest_state *fest, int id)
 {
-  if (id < 0 || (size_t)id >= fest->pic_list_len)
+  FILE *f = fopen (fest->profile_path, "r");
+  if (!f)
     {
-      fprintf (stderr, "ERROR: id (%d) out of bounds [0, %zu)\n", id,
-               fest->pic_list_len);
-      exit (EX_USAGE);
+      fprintf (stderr, "ERROR: cannot open %s: %s\n", fest->profile_path,
+               strerror (errno));
+      exit (EX_IOERR);
+    }
+  /*
+    ^~ -- path
+    ^/ -- path
+    ^$ -- stop
+    $ -- stop
+    \n~ -- path
+    \n/ -- path
+    \n$ -- stop
+   */
+  int len = 0;
+  int lastc = '\n';
+  int c;
+  while (1)
+    {
+      c = fgetc (f);
+      if (c == EOF)
+        {
+          break;
+        }
+      else if (lastc == '\n')
+        {
+          if (c == '~' || c == '/')
+            {
+              ++len;
+            }
+        }
+      lastc = c;
     }
 
+  if (len == 0)
+    {
+      fprintf (stderr, "ERROR: profile %s has no valid pic path\n",
+               fest->profile_path);
+      exit (-1);
+    }
+  
+  id = id % len;
+  if (id < 0)
+    {
+      id += len;
+    }
+  fest->pic_id = id;
+
+  char cur_pic[PATH_MAX];
+  rewind (f);
+  while (1)
+    {
+      c = fgetc (f);
+      if (c == EOF)
+        {
+          break;
+        }
+      else if (lastc == '\n')
+        {
+          if (c == '~')
+            {
+              if (id-- == 0)
+                {
+                  char *line;
+                  size_t n;
+                  getline (&line, &n, f);
+                  snprintf (cur_pic, PATH_MAX, "%s%s", fest->home_dir, line);
+                  free (line);
+                  str_trim (cur_pic);
+                  break;
+                }
+            }
+          else if (c == '/')
+            {
+              if (id-- == 0)
+                {
+                  char *line;
+                  size_t n;
+                  getline (&line, &n, f);
+                  snprintf (cur_pic, PATH_MAX, "/%s", line);
+                  free (line);
+                  str_trim (cur_pic); 
+                  break;
+                }              
+            }
+        }
+      lastc = c;
+    }
+  fclose (f);
+
   char *cmd = NULL;
-  asprintf (&cmd, "/bin/feh --bg-max \"%s\"", fest->pic_list[id]);
+  asprintf (&cmd, "/bin/feh --bg-max \"%s\"", cur_pic);
   fprintf (stderr, "Executing cmd: %s\n", cmd);
   if (system (cmd) == 0)
     {
-      fest->pic_cur_id = id;
       fest_write_id (fest);
     }
   free (cmd);
@@ -233,69 +353,28 @@ fest_goto_id (struct fest_state *fest, int id)
 void
 fest_goto_next (struct fest_state *fest)
 {
-  int id = fest->pic_cur_id + 1;
-  id %= fest->pic_list_len;
-  fest_goto_id (fest, id);
+  fest_goto_id (fest, fest->pic_id + 1);
 }
 
 void
 fest_goto_prev (struct fest_state *fest)
 {
-  int id = fest->pic_cur_id - 1;
-  if (id < 0)
-    {
-      id = fest->pic_list_len - 1;
-    }
-  fest_goto_id (fest, id);
-}
-
-void
-fest_pic_list_append (struct fest_state *fest, const char *pic_path)
-{
-  size_t len = fest->pic_list_len + 1;
-  size_t cap = fest->pic_list_cap;
-  if (len > cap)
-    {
-      cap = len * 2 > FEST_PIC_LIST_LEN_INIT ? len * 2
-                                             : FEST_PIC_LIST_LEN_INIT;
-      fest->pic_list = realloc (fest->pic_list, sizeof *fest->pic_list * cap);
-      fest->pic_list_cap = cap;
-    }
-
-  fest->pic_list[len - 1] = pic_path;
-  fest->pic_list_len = len;
-}
-
-void
-fest_pic_list_free (struct fest_state *fest)
-{
-  if (!fest->pic_list)
-    {
-      return;
-    }
-  for (size_t i = 0; i != fest->pic_list_len; ++i)
-    {
-      fprintf (stderr, "freeing \"%s\" ... ", fest->pic_list[i]);
-      fflush (stderr);
-      free ((char *)fest->pic_list[i]);
-      fputs ("done\n", stderr);
-    }
-  free (fest->pic_list);
-  fest->pic_list = NULL;
+  fest_goto_id (fest, fest->pic_id - 1);
 }
 
 void
 fest_write_id (struct fest_state *fest)
 {
-  FILE *f = fopen (fest->pic_cur_id_path, "w");
+  FILE *f = fopen (fest->id_path, "w");
   if (!f)
     {
       fprintf (stderr, "ERROR: failed to write to %s\n",
-               fest->pic_cur_id_path);
+               fest->id_path);
       exit (EX_IOERR);
     }
 
-  fprintf (f, "%d\n", fest->pic_cur_id);
+  fprintf (f, "%d\n", fest->pic_id);
+  fprintf (stderr, "INFO: pic_id writen to %s\n", fest->id_path);
   fclose (f);
 }
 
@@ -329,4 +408,20 @@ str_trim (char *str)
       ++cpy;
     }
   *cur = 0;
+}
+
+static inline void
+fest_write_session (struct fest_state *fest)
+{
+  FILE *f = fopen (fest->session_path, "w");
+  if (!f)
+    {
+      fprintf (stderr, "ERROR: failed to write to %s\n",
+               fest->id_path);
+      exit (EX_IOERR);
+    }
+
+  fprintf (f, "%s\n", fest->profile_path);
+  fprintf (stderr, "INFO: session writen to %s\n", fest->session_path);
+  fclose (f);
 }
