@@ -66,6 +66,8 @@ static inline void fest_goto_id (struct fest_state *fest, int id);
 static inline void fest_goto_next (struct fest_state *fest);
 static inline void fest_goto_prev (struct fest_state *fest);
 
+static inline void fest_get_pic_path (struct fest_state *fest, int id, char pic_path[PATH_MAX]);
+
 static inline void fest_write_session (struct fest_state *fest);
 static inline void fest_write_id (struct fest_state *fest);
 
@@ -103,6 +105,15 @@ main (int argc, char **argv)
           {
             fest_init (&fest, NULL);
             fest_goto_prev(&fest);
+            exit (EX_OK);
+          }
+        else if (0 == strcmp (argv[1], "status"))
+          {
+            fest_init (&fest, NULL);
+            fprintf (stderr, "INFO: from profile %s\n", fest.profile_path);
+            char pic_path[PATH_MAX];
+            fest_get_pic_path(&fest, fest.pic_id, pic_path);
+            fprintf (stderr, "INFO: pic: %s\n", pic_path);
             exit (EX_OK);
           }
         else
@@ -144,23 +155,23 @@ show_help (void)
   fprintf (
       stderr,
       "Usage:\n"
-      "  fest select <profile>\n"
+      "  fest (select | s) <profile>\n"
       "  fest next\n"
       "  fest prev\n"
+      "  fest status\n"
       "  fest -v | --version\n"
       "  fest -h | --help\n"
       "\n"
       "Subcommands:\n"
-      "  select <profile>  set current profile to <profile>,\n"
-      "                    which is a file name in ~/.config/fest.\n"
-      "  next              set current bg to the next pic of current profile\n"
-      "  prev              set current bg to the previous pic of current "
-      "profile\n"
+      "  (select | s) <profile>  Set current profile to <profile>,\n"
+      "                          which is a file name in ~/.config/fest.\n"
+      "  next                    Set current bg to the next pic of current profile\n"
+      "  prev                    Set current bg to the previous pic of current profile\n"
+      "  status                  Show current profile path and pic path\n"
       "\n"
       "Options:\n"
-      "  -h     --help    Show this screen.\n"
-      "  -v     --version Show version.\n"
-  );
+      "  -h     --help           Show this screen.\n"
+      "  -v     --version        Show version.\n");
 }
 
 void
@@ -257,98 +268,8 @@ fest_init (struct fest_state *fest, const char *profile)
 void
 fest_goto_id (struct fest_state *fest, int id)
 {
-  FILE *f = fopen (fest->profile_path, "r");
-  if (!f)
-    {
-      fprintf (stderr, "ERROR: cannot open %s: %s\n", fest->profile_path,
-               strerror (errno));
-      exit (EX_IOERR);
-    }
-  /*
-    ^~ -- path
-    ^/ -- path
-    ^$ -- stop
-    $ -- stop
-    \n~ -- path
-    \n/ -- path
-    \n$ -- stop
-   */
-  int len = 0;
-  int lastc = '\n';
-  int c;
-  while (1)
-    {
-      c = fgetc (f);
-      if (c == EOF)
-        {
-          break;
-        }
-      else if (lastc == '\n')
-        {
-          if (c == '~' || c == '/')
-            {
-              ++len;
-            }
-        }
-      lastc = c;
-    }
-
-  if (len == 0)
-    {
-      fprintf (stderr, "ERROR: profile %s has no valid pic path\n",
-               fest->profile_path);
-      exit (-1);
-    }
-
-  id = id % len;
-  if (id < 0)
-    {
-      id += len;
-    }
-  fest->pic_id = id;
-
   char cur_pic[PATH_MAX];
-  rewind (f);
-  while (1)
-    {
-      c = fgetc (f);
-      if (c == EOF)
-        {
-          break;
-        }
-      else if (lastc == '\n')
-        {
-          if (c == '~')
-            {
-              if (id-- == 0)
-                {
-                  char *line;
-                  size_t n;
-                  getline (&line, &n, f);
-                  snprintf (cur_pic, PATH_MAX, "%s%s", fest->home_dir, line);
-                  free (line);
-                  str_trim (cur_pic);
-                  break;
-                }
-            }
-          else if (c == '/')
-            {
-              if (id-- == 0)
-                {
-                  char *line;
-                  size_t n;
-                  getline (&line, &n, f);
-                  snprintf (cur_pic, PATH_MAX, "/%s", line);
-                  free (line);
-                  str_trim (cur_pic);
-                  break;
-                }
-            }
-        }
-      lastc = c;
-    }
-  fclose (f);
-
+  fest_get_pic_path (fest, id, cur_pic);
   char *cmd = NULL;
   asprintf (&cmd, "/bin/feh --bg-max \"%s\"", cur_pic);
   fprintf (stderr, "Executing cmd: %s\n", cmd);
@@ -432,5 +353,100 @@ fest_write_session (struct fest_state *fest)
 
   fprintf (f, "%s\n", fest->profile_path);
   fprintf (stderr, "INFO: session writen to %s\n", fest->session_path);
+  fclose (f);
+}
+
+static inline void
+fest_get_pic_path (struct fest_state *fest, int id, char pic_path[PATH_MAX])
+{
+    FILE *f = fopen (fest->profile_path, "r");
+  if (!f)
+    {
+      fprintf (stderr, "ERROR: cannot open %s: %s\n", fest->profile_path,
+               strerror (errno));
+      exit (EX_IOERR);
+    }
+  /*
+    ^~ -- path
+    ^/ -- path
+    ^$ -- stop
+    $ -- stop
+    \n~ -- path
+    \n/ -- path
+    \n$ -- stop
+   */
+  int len = 0;
+  int lastc = '\n';
+  int c;
+  while (1)
+    {
+      c = fgetc (f);
+      if (c == EOF)
+        {
+          break;
+        }
+      else if (lastc == '\n')
+        {
+          if (c == '~' || c == '/')
+            {
+              ++len;
+            }
+        }
+      lastc = c;
+    }
+
+  if (len == 0)
+    {
+      fprintf (stderr, "ERROR: profile %s has no valid pic path\n",
+               fest->profile_path);
+      exit (-1);
+    }
+
+  id = id % len;
+  if (id < 0)
+    {
+      id += len;
+    }
+  fest->pic_id = id;
+
+  rewind (f);
+  while (1)
+    {
+      c = fgetc (f);
+      if (c == EOF)
+        {
+          break;
+        }
+      else if (lastc == '\n')
+        {
+          if (c == '~')
+            {
+              if (id-- == 0)
+                {
+                  char *line;
+                  size_t n;
+                  getline (&line, &n, f);
+                  snprintf (pic_path, PATH_MAX, "%s%s", fest->home_dir, line);
+                  free (line);
+                  str_trim (pic_path);
+                  break;
+                }
+            }
+          else if (c == '/')
+            {
+              if (id-- == 0)
+                {
+                  char *line;
+                  size_t n;
+                  getline (&line, &n, f);
+                  snprintf (pic_path, PATH_MAX, "/%s", line);
+                  free (line);
+                  str_trim (pic_path);
+                  break;
+                }
+            }
+        }
+      lastc = c;
+    }
   fclose (f);
 }

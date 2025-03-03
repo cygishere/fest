@@ -3,21 +3,23 @@
 ## Usage
 ```shell
 Usage:
-  fest select <profile>
+  fest (select | s) <profile>
   fest next
   fest prev
+  fest status
   fest -v | --version
   fest -h | --help
 
 Subcommands:
-  select <profile>  set current profile to <profile>,
-                    which is a file name in ~/.config/fest.
-  next              set current bg to the next pic of current profile
-  prev              set current bg to the previous pic of current profile
+  (select | s) <profile>  Set current profile to <profile>,
+                          which is a file name in ~/.config/fest.
+  next                    Set current bg to the next pic of current profile
+  prev                    Set current bg to the previous pic of current profile
+  status                  Show current profile path and pic path
 
 Options:
-  -h     --help    Show this screen.
-  -v     --version Show version.
+  -h     --help           Show this screen.
+  -v     --version        Show version.
 ```
 
 ## <profile> file
